@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tianji.learning.mapper.LearningLessonMapper">
+
+    <delete id="deleteByMap">
+        DELETE FROM learning_lesson
+        WHERE user_id = #{user_id}
+        AND course_id IN
+        <foreach item="courseId" collection="course_id" open="(" separator="," close=")">
+            #{courseId}
+        </foreach>
+    </delete>
+
+</mapper>
