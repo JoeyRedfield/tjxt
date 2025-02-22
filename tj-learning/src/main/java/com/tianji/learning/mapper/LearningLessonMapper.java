@@ -17,4 +17,7 @@ public interface LearningLessonMapper extends BaseMapper<LearningLesson> {
 
 
     void deleteByMap(@Param("user_id") Long userId, @Param("course_id") List<Long> courseIds);
+
+    Integer queryTotalWeekFreq(Long userId);
+
 }

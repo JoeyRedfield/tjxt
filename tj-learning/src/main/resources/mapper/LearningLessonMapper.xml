@@ -10,5 +10,14 @@
             #{courseId}
         </foreach>
     </delete>
+    <select id="queryTotalWeekFreq" resultType="java.lang.Integer">
+        SELECT SUM(week_freq)
+        from learning_lesson
+        where user_id = #{userId}
+          and plan_status = 1
+          and status in (0, 1)
+
+    </select>
+
 
 </mapper>

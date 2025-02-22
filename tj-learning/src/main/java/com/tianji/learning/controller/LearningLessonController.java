@@ -3,7 +3,10 @@ package com.tianji.learning.controller;
 import com.tianji.common.domain.dto.PageDTO;
 import com.tianji.common.domain.query.PageQuery;
 import com.tianji.common.utils.CollUtils;
+import com.tianji.learning.domain.dto.LearningPlanDTO;
 import com.tianji.learning.domain.vo.LearningLessonVO;
+import com.tianji.learning.domain.vo.LearningPlanPageVO;
+import io.swagger.annotations.ApiParam;
 import org.springframework.web.bind.annotation.*;
 import com.tianji.learning.service.ILearningLessonService;
 import io.swagger.annotations.ApiOperation;
@@ -62,5 +65,19 @@ public class LearningLessonController {
         return learningLessonService.countLearningLessonByCourse(courseId);
     }
 
+    /**
+     * 创建学习计划
+     */
+    @ApiOperation("创建学习计划")
+    @PostMapping("/plans")
+    public void createLearningPlan(@RequestBody LearningPlanDTO dto){
+        learningLessonService.createLearningPlan(dto);
+    }
+
+    @GetMapping("/plans")
+    @ApiOperation("分页查询我的课程计划")
+    public LearningPlanPageVO queryMyPlans(PageQuery pageQuery){
+        return learningLessonService.queryMyPlans(pageQuery);
+    }
 
 }

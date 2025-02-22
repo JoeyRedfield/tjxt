@@ -1,5 +1,7 @@
 package com.tianji.learning.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.conditions.query.QueryChainWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -14,19 +16,28 @@ import com.tianji.common.domain.dto.PageDTO;
 import com.tianji.common.domain.query.PageQuery;
 import com.tianji.common.exceptions.BadRequestException;
 import com.tianji.common.exceptions.BizIllegalException;
+import com.tianji.common.exceptions.DbException;
 import com.tianji.common.utils.BeanUtils;
 import com.tianji.common.utils.CollUtils;
+import com.tianji.common.utils.DateUtils;
 import com.tianji.common.utils.UserContext;
+import com.tianji.learning.domain.dto.LearningPlanDTO;
 import com.tianji.learning.domain.po.LearningLesson;
+import com.tianji.learning.domain.po.LearningRecord;
 import com.tianji.learning.domain.vo.LearningLessonVO;
+import com.tianji.learning.domain.vo.LearningPlanPageVO;
+import com.tianji.learning.domain.vo.LearningPlanVO;
 import com.tianji.learning.enums.LessonStatus;
+import com.tianji.learning.enums.PlanStatus;
 import com.tianji.learning.mapper.LearningLessonMapper;
+import com.tianji.learning.mapper.LearningRecordMapper;
 import com.tianji.learning.service.ILearningLessonService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -49,6 +60,7 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
     final CatalogueClient catalogueClient;
     final LearningClient learningClient;
     final LearningLessonMapper learningLessonMapper;
+    final LearningRecordMapper learningRecordMapper;
 
     @Override
     @Transactional
@@ -210,7 +222,7 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
         }
 
         LocalDateTime expireTime = lesson.getExpireTime();
-        if(expireTime != null && LocalDateTime.now().isAfter(expireTime)){
+        if (expireTime != null && LocalDateTime.now().isAfter(expireTime)) {
             return null;
         }
 
@@ -243,5 +255,88 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
             return 0;
         }
         return lambdaQuery().eq(LearningLesson::getCourseId, courseId).count();
+    }
+
+    @Override
+    public void createLearningPlan(LearningPlanDTO dto) {
+        Long userId = UserContext.getUser();
+        LearningLesson lesson = lambdaQuery().eq(LearningLesson::getCourseId, dto.getCourseId())
+                .eq(LearningLesson::getUserId, userId).one();
+        if (lesson == null) {
+            throw new BizIllegalException("课程不存在.");
+        }
+//        lesson.setWeekFreq(dto.getFreq());
+//        updateById(lesson); //这种是更新全部字段了
+        lambdaUpdate()
+                .set(LearningLesson::getWeekFreq, dto.getFreq())
+                .set(lesson.getPlanStatus() == PlanStatus.NO_PLAN, LearningLesson::getPlanStatus, PlanStatus.PLAN_RUNNING)
+                .eq(LearningLesson::getId, lesson.getId())
+                .update(); //这种则只更新某个字段, 效率更高.
+    }
+
+    @Override
+    public LearningPlanPageVO queryMyPlans(PageQuery pageQuery) {
+        Long userId = UserContext.getUser();
+        LocalDate now = LocalDate.now();
+        LocalDateTime weekBeginTime = DateUtils.getWeekBeginTime(now);
+        LocalDateTime weekEndTime = DateUtils.getWeekEndTime(now);
+        LearningPlanPageVO vo = new LearningPlanPageVO();
+
+        Integer plansTotal = learningLessonMapper.queryTotalWeekFreq(userId);
+        if (plansTotal != null) {
+            vo.setWeekTotalPlan(plansTotal);
+        }
+
+        Integer weekFinishedPlanNum = learningRecordMapper.selectCount(new LambdaQueryWrapper<LearningRecord>()
+                .eq(LearningRecord::getUserId, userId)
+                .eq(LearningRecord::getFinished, true)
+                .between(LearningRecord::getFinishTime, weekBeginTime, weekEndTime));
+        vo.setWeekFinished(weekFinishedPlanNum);
+
+
+        Page<LearningLesson> page = lambdaQuery()
+                .eq(LearningLesson::getUserId, userId)
+                .eq(LearningLesson::getPlanStatus, PlanStatus.PLAN_RUNNING)
+                .in(LearningLesson::getStatus, LessonStatus.LEARNING, LessonStatus.NOT_BEGIN)
+                .page(pageQuery.toMpPage("latest_learn_time", false));
+        List<LearningLesson> records = page.getRecords();
+        if (CollUtils.isEmpty(records)) {
+            vo.setTotal(0L);
+            vo.setPages(0L);
+            vo.setList(CollUtils.emptyList());
+            return vo;
+        }
+
+
+        List<LearningPlanVO> voList = new ArrayList<>();
+        List<Long> cids = records.stream().map(LearningLesson::getCourseId).collect(Collectors.toList());
+
+        List<CourseSimpleInfoDTO> cinfolist = courseClient.getSimpleInfoList(cids);
+        if (CollUtils.isEmpty(cinfolist)) {
+            throw new BizIllegalException("课程不存在.");
+        }
+
+        List<LearningRecord> learningRecords = learningRecordMapper.selectList(new QueryWrapper<LearningRecord>()
+                .select("lesson_id as lessonId", "count(*) as userId")
+                .eq("user_id", userId)
+                .eq("finished", true)
+                .between("finish_time", weekBeginTime, weekEndTime)
+                .groupBy("lesson_id"));
+        Map<Long, Long> collect = learningRecords.stream().collect(Collectors.toMap(LearningRecord::getLessonId, LearningRecord::getUserId));
+
+        Map<Long, CourseSimpleInfoDTO> cinfoMap = cinfolist.stream().collect(Collectors.toMap(CourseSimpleInfoDTO::getId, c -> c));
+        for (LearningLesson record : records) {
+            LearningPlanVO planVO = BeanUtils.copyBean(record, LearningPlanVO.class);
+            CourseSimpleInfoDTO dto = cinfoMap.get(record.getCourseId());
+            if (dto != null) {
+                planVO.setCourseName(dto.getName());
+                planVO.setSections(dto.getSectionNum());
+            }
+            planVO.setWeekLearnedSections(collect.getOrDefault(record.getId(), 0L).intValue());
+            voList.add(planVO);
+        }
+
+
+        return vo.pageInfo(page.getTotal(), page.getPages(), voList);
     }
 }
