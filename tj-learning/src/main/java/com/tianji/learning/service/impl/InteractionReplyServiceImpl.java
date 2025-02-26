@@ -3,6 +3,7 @@ package com.tianji.learning.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.tianji.api.client.remark.RemarkClient;
 import com.tianji.api.client.user.UserClient;
 import com.tianji.api.dto.user.UserDTO;
 import com.tianji.common.domain.dto.PageDTO;
@@ -45,6 +46,7 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
 
     private final InteractionQuestionMapper questionMapper;
     private final UserClient userClient;
+    private final RemarkClient remarkClient;
 
     @Transactional
     @Override
@@ -143,11 +145,13 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
         }
         Set<Long> uids = new HashSet<>();
         Set<Long> targetReplyIds = new HashSet<>();
+        List<Long> answerIds = new ArrayList<>();
 
         for (InteractionReply record : records) {
             if (!record.getAnonymity()) {
                 uids.add(record.getUserId());
             }
+            answerIds.add(record.getId());
             if (record.getTargetReplyId() != null && record.getTargetReplyId() > 0) {
                 // 不为空且大于0, 说明这个是评论
                 targetReplyIds.add(record.getTargetReplyId());
@@ -168,6 +172,8 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
             userDTOMap = userDTOS.stream().collect(Collectors.toMap(UserDTO::getId, c -> c));
         }
 
+        Set<Long> bizLiked = remarkClient.getLikesStatusByBizIds(answerIds);
+
         List<ReplyVO> replyVOList = new ArrayList<>();
         for (InteractionReply record : records) {
             ReplyVO vo = BeanUtils.copyBean(record, ReplyVO.class);
@@ -182,6 +188,9 @@ public class InteractionReplyServiceImpl extends ServiceImpl<InteractionReplyMap
             UserDTO targetUserDTO = userDTOMap.get(record.getTargetUserId());
             if (targetUserDTO != null) {
                 vo.setTargetUserName(targetUserDTO.getName());
+            }
+            if(bizLiked.contains(record.getId())){
+                vo.setLiked(true);
             }
             replyVOList.add(vo);
         }
