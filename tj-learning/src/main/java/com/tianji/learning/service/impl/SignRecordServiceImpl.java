@@ -4,7 +4,6 @@ import com.tianji.common.autoconfigure.mq.RabbitMqHelper;
 import com.tianji.common.constants.MqConstants;
 import com.tianji.common.exceptions.BizIllegalException;
 import com.tianji.common.utils.CollUtils;
-import com.tianji.common.utils.StringUtils;
 import com.tianji.common.utils.UserContext;
 import com.tianji.learning.constans.RedisConstants;
 import com.tianji.learning.domain.vo.SignResultVO;
@@ -62,6 +61,32 @@ public class SignRecordServiceImpl implements ISignRecordService {
         vo.setRewardPoints(rewardPoints);
 
         return vo;
+    }
+
+    @Override
+    public Byte[] querySignRecords() {
+        Long userId = UserContext.getUser();
+        LocalDate now = LocalDate.now();
+        String monthAndYear = DateTimeFormatter.ofPattern(":yyyyMM").format(now);
+        String signRecordKey = RedisConstants.SIGN_RECORD_KEY_PREFIX + userId.toString() + monthAndYear;
+        int dayOfMonth = now.getDayOfMonth(); // 这也是list长度
+        List<Long> longs = redisTemplate.opsForValue().bitField(signRecordKey,
+                BitFieldSubCommands.create()
+                        .get(BitFieldSubCommands.BitFieldType.unsigned(dayOfMonth)).valueAt(0));
+        if(CollUtils.isEmpty(longs)){
+            return new Byte[0];
+        }
+        // 获取签到记录
+        int res = longs.get(0).intValue();
+        int offset = dayOfMonth - 1;
+        Byte[] temp = new Byte[dayOfMonth];
+//        List<Integer> list = new ArrayList<>(dayOfMonth);
+        while(offset >= 0){
+            temp[offset] = (byte)(res & 1);
+            offset--;
+            res = res >>> 1;
+        }
+        return temp;
     }
 
     private int continuousDays(int dayOfMonth, String signRecordKey) {

@@ -10,9 +10,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.lang.reflect.Array;
-import java.util.Arrays;
-
 @Api(tags = "签到相关接口")
 @RestController
 @RequestMapping("/sign-records")
@@ -27,11 +24,10 @@ public class SignRecordController {
         return signRecordService.addSignRecords();
     }
 
-    // todo
     @ApiOperation("查询签到记录")
     @GetMapping
-    public void getSignRecords(){
-
+    public Byte[] querySignRecords(){
+        return signRecordService.querySignRecords();
     }
 
 
