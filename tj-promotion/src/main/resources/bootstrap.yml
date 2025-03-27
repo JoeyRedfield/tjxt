@@ -22,6 +22,8 @@ spring:
             refresh: false
           - data-id: shared-feign.yaml # 共享feign配置
             refresh: false
+          - data-id: shared-mq.yaml # 共享mq配置
+            refresh: false
           - data-id: shared-xxljob.yaml # 共享mq配置
             refresh: false
 tj:
@@ -42,3 +44,7 @@ tj:
       enable: true # 开启登录拦截的功能
       exclude-login-paths:
         - /coupons/list # 放行优惠券列表 - 用户端
+  mq:
+    listener:
+      retry:
+        stateless: false # false有状态。如果业务中包含事务，这里改为false
