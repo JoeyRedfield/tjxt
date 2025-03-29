@@ -1,7 +1,11 @@
 package com.tianji.promotion.mapper;
 
+import com.tianji.promotion.domain.po.Coupon;
 import com.tianji.promotion.domain.po.UserCoupon;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
 
 /**
  * <p>
@@ -12,4 +16,9 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
  */
 public interface UserCouponMapper extends BaseMapper<UserCoupon> {
 
+    @Select("SELECT c.id, c.discount_type, c.`specific`, c.threshold_amount, c.discount_value, c.max_discount_amount, uc.id as creater " +
+            "FROM coupon c \n" +
+            "INNER JOIN user_coupon uc on c.id = uc.coupon_id\n" +
+            "WHERE uc.user_id=#{userId} AND uc.`status` = 1")
+    List<Coupon> queryMyCoupons(Long userId);
 }
